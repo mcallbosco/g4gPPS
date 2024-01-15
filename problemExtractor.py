@@ -3,11 +3,35 @@ import json
 import requests
 from time import sleep
 import random
+import cookie
 
-outputFolder = "F:\\G4GCollection\\FileOutput\\"
+folderPath = "put scraper output folder here"
+outputFolder = "put final output folder here"
 problemID = 0
 
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
 
+cookie = {
+}
 
 def get_files_in_folder(folder_path):
     files = []
@@ -21,6 +45,8 @@ def concotinateJSONs(folder_path):
     global problemID
     #data['message']['submissions']['LastEvaluatedKey']['Items']
     files = get_files_in_folder(folder_path)
+    if len(files) == 1:
+        return None
     data = []
     firstRun = True
     for file in files:
@@ -67,7 +93,6 @@ def makeSureAtleast1IncorrectForEachUser(data):
 def getCode(submissionID):
     #random sleep between 1 and 2 seconds 
     sleep(random.uniform(1, 2))
-    #https://practiceapi.geeksforgeeks.org/api/latest/problems/submissions/32ab0f67be7594527bf260a7167c07b5/
     urlPre = "https://practiceapi.geeksforgeeks.org/api/latest/problems/submissions/"
 
     cookies = cookie
@@ -97,33 +122,68 @@ def dataOutput (data):
             os.mkdir(outputFolder + str(problemID) + "\\" + user)
         except:
             pass
+        
         counter = 0
         for submission in data[user]:
-            if submission['exec_status_text'] == "Correct":
-                with open(outputFolder + str(problemID) + "\\" + user + "\\" + str(counter) + "_correct.txt", "w") as f:
-                    f.write(getCode(submission['submission_id']))
-            else:
-                with open(outputFolder + str(problemID) + "\\" + user + "\\" + str(counter) + "_incorrect.txt", "w") as f:
-                    f.write(getCode(submission['submission_id']))
+            try:
+                if submission['exec_status_text'] == "Correct":
+                    with open(outputFolder + str(problemID) + "\\" + user + "\\" + str(counter) + "_correct.txt", "w") as f:
+                        f.write(getCode(submission['submission_id']))
+                else:
+                    with open(outputFolder + str(problemID) + "\\" + user + "\\" + str(counter) + "_incorrect.txt", "w") as f:
+                        f.write(getCode(submission['submission_id']))
+            except:
+                pass
             counter += 1
             
         
+def cookieToDict(cookieSTR):
+    #get cookie from cookieStr
+    cookie = cookieSTR.split("; ")
+    cookieDict = {}
+    for c in cookie:
+        c = c.split("=")
+        cookieDict[c[0]] = c[1]
+    return cookieDict
+
+def processFolder(folderPath, cookie):
+    data = concotinateJSONs(folderPath)
+    if data == None:
+        return
+    data = onlyLanguage(data, "python3")
+    data = seperateByUsers(data)
+    data = makeSureAtleast1IncorrectForEachUser(data)
+    sortUserSubmissionsDate(data)
+    dataOutput(data)
+    
 
 
 
 def main():
-    data = concotinateJSONs("F:\\G4GCollection\\701227")
-    data = onlyLanguage(data, "python3")
-    data = seperateByUsers(data)
-    for user in data:
-        if len(data[user]) > 1:
-            print (str(len(data[user])) + " " + user)
-    print (len(data))
-    data = makeSureAtleast1IncorrectForEachUser(data)
-    sortUserSubmissionsDate(data)
-    print (len(data))
-    dataOutput(data)
-
-    #print(data)
+    global cookie
+    cookieStr = cookie.cookieSTR
+    cookie = cookieToDict(cookieStr)
+    #check how many folders are in the folder
+    folders = []
+    for root, dirs, filenames in os.walk(folderPath):
+        for dir in dirs:
+            folders.append(os.path.join(root, dir))
+    print (folders)
+    #make a list of exsisting folders at the top level in the output folder
+    outputFolders = []
+    for root, dirs, filenames in os.walk(outputFolder):
+        if root == outputFolder:
+            for dir in dirs:
+                outputFolders.append(os.path.join(root, dir))
+    print (outputFolders)
+    #skip the folders that already exist
+    for folder in outputFolders:
+        if folderPath + folder.split("\\")[-1] in folders:
+            folders.remove(folderPath + folder.split("\\")[-1])
+    print (folders)    
+    #process the folders
+    for folder in folders:
+        printProgressBar(folders.index(folder), len(folders), prefix = 'Progress:', suffix = 'Complete', length = 50)
+        processFolder(folder, cookie)
 
 main()
